@@ -21,7 +21,7 @@ TypeSimulator 是一个高级输入模拟工具，提供精确的打字模拟和
 - **总代码行数**: 约 1,500 行
 - **核心文件数**: 12 个源代码文件
 - **主要类**: 7 个业务逻辑类
-- **开发周期**: 约 15 天
+- **开发周期**: 约 5 小时
 - **工具依赖**: 标准 .NET 组件，无需额外依赖项
 - **最后更新**: 2025-03-09
 
@@ -149,10 +149,6 @@ TypeSimulator 目前所有配置都通过界面进行设置。在后续版本中
 3. 提交您的更改 (`git commit -m 'Add some amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 开启一个 Pull Request
-
-## 📄 许可证
-
-此项目根据 MIT 许可证授权 - 详细条款请参阅 [LICENSE](LICENSE) 文件。
 
 ## 🙏 致谢
 
