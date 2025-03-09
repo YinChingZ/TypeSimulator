@@ -3,7 +3,7 @@
 ![版本](https://img.shields.io/badge/版本-1.0.0-blue.svg)
 ![平台](https://img.shields.io/badge/平台-Windows-brightgreen.svg)
 ![语言](https://img.shields.io/badge/语言-C%23-orange.svg)
-![框架](https://img.shields.io/badge/框架-.NET%20Framework%204.7.2-blueviolet.svg)
+![框架](https://img.shields.io/badge/框架-.NET%20Framework%204.8-blueviolet.svg)
 
 TypeSimulator 是一个高级输入模拟工具，提供精确的打字模拟和键盘映射功能。该工具可以帮助用户在各种场景下实现自动化输入，提高工作效率。
 
