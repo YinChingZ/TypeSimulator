@@ -1,0 +1,7 @@
+<Project>
+  <!-- WPF creates TypeSimulator.Local_*_wpftmp projects for local XAML types. -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('TypeSimulator.Local'))">
+    <BaseIntermediateOutputPath>../../artifacts/obj/app/</BaseIntermediateOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

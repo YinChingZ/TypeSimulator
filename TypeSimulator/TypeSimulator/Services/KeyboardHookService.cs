@@ -143,19 +143,24 @@ namespace TypeSimulator.Services
 
                 if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
                 {
-                    int vkCode = Marshal.ReadInt32(lParam);
+                    var input = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+                    // SendInput events may arrive after SimulationCompleted; never map them again.
+                    if ((input.flags & 0x10) != 0)
+                        return CallNextHookEx(_hookID, nCode, wParam, lParam);
+                    int vkCode = (int)input.vkCode;
                     Keys key = (Keys)vkCode;  // 添加这一行定义key变量
 
                     // 获取当前修饰键状态
                     Keys modifiers = Control.ModifierKeys;
 
                     // 使用修饰键信息调用OnKeyDown
+                    bool block = _blockOriginalKeypress && !_isPaused && IsRegularKey(key) && modifiers == Keys.None;
                     OnKeyDown(key, modifiers);
 
                     // 修改: 仅对可映射的普通按键阻止原始按键传播
                     // 对于功能键、控制键等特殊按键，始终允许原始按键事件传递
                     // 修改: 在映射暂停时不阻止原始按键
-                    if (_blockOriginalKeypress && !_isPaused && IsRegularKey(key) && modifiers == Keys.None)
+                    if (block)
                     {
                         return (IntPtr)1;  // 返回非零值阻止按键事件传递
                     }

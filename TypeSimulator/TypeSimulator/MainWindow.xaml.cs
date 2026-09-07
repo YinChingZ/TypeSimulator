@@ -26,13 +26,17 @@ namespace TypeSimulator
         private readonly LogService _logService;
         private readonly HotkeyManager _hotkeyManager;
         private TypeSimulator.Models.Settings _settings;
+        private readonly Func<string> _readClipboard;
 
 
         // 防止重复初始化标志
         private bool _isInitialized = false;
 
-        public MainWindow()
+        public MainWindow() : this(ClipboardService.GetText) { }
+
+        internal MainWindow(Func<string> readClipboard)
         {
+            _readClipboard = readClipboard ?? throw new ArgumentNullException(nameof(readClipboard));
             InitializeComponent();
 
             try
@@ -55,6 +59,14 @@ namespace TypeSimulator
                 // 注册事件
                 _typeSimulator.TypingCompleted += TypeSimulator_TypingCompleted;
                 _typeSimulator.CharacterTyped += TypeSimulator_CharacterTyped;
+                _typeSimulator.StartDelayChanged += (s, seconds) =>
+                    StatusText.Text = seconds > 0 ? $"等待 {seconds} 秒，请切换窗口..." : "打字中...";
+                _typeSimulator.TypingFailed += (s, error) =>
+                {
+                    PauseTypingButton.Content = "继续";
+                    StatusText.Text = "输入失败，已暂停";
+                    _logService.Log(error.Message, LogService.LogLevel.Error);
+                };
                 _keyboardHook.KeyDown += KeyboardHook_KeyDown;
                 // 在构造函数或初始化代码中添加
                 _keyMapper.MappingCompleted += KeyMapper_MappingCompleted;
@@ -92,6 +104,8 @@ namespace TypeSimulator
             SpeedSlider.Value = _settings.TypingSpeed;
             RandomDelayCheckBox.IsChecked = _settings.EnableRandomDelay;
             EnableMappingCheckBox.IsChecked = _settings.MappingEnabled;
+            StartDelaySlider.Value = _settings.StartDelaySeconds;
+            UseClipboardCheckBox.IsChecked = _settings.UseClipboard;
 
             // 设置初始按钮状态
             UpdateButtonStates(false);
@@ -104,6 +118,12 @@ namespace TypeSimulator
             StartTypingButton.IsEnabled = !isTyping;
             PauseTypingButton.IsEnabled = isTyping;
             StopTypingButton.IsEnabled = isTyping;
+            UseClipboardCheckBox.IsEnabled = !isTyping;
+            StartDelaySlider.IsEnabled = !isTyping;
+            SpeedSlider.IsEnabled = !isTyping;
+            RandomDelayCheckBox.IsEnabled = !isTyping;
+            EnableMappingCheckBox.IsEnabled = !isTyping;
+            if (!isTyping) PauseTypingButton.Content = "暂停";
         }
 
         private void RegisterHotkeys()
@@ -221,7 +241,7 @@ namespace TypeSimulator
         {
             try
             {
-                string clipboardText = ClipboardService.GetText();
+                string clipboardText = _readClipboard();
                 if (!string.IsNullOrEmpty(clipboardText))
                 {
                     InputTextBox.Text = clipboardText;
@@ -298,7 +318,7 @@ namespace TypeSimulator
             {
                 int speed = (int)e.NewValue;
                 SpeedValueText.Text = $"{speed} CPM";
-                _settings.TypingSpeed = speed;
+                if (_settings != null) _settings.TypingSpeed = speed;
             }
         }
 
@@ -445,13 +465,19 @@ namespace TypeSimulator
         {
             try
             {
-                if (string.IsNullOrEmpty(InputTextBox.Text))
+                if (_typeSimulator.IsTyping) return;
+                _settings.TypingSpeed = (int)SpeedSlider.Value;
+                _settings.EnableRandomDelay = RandomDelayCheckBox.IsChecked == true;
+                _settings.StartDelaySeconds = (int)StartDelaySlider.Value;
+                _settings.UseClipboard = UseClipboardCheckBox.IsChecked == true;
+                string sourceText = _settings.UseClipboard ? _readClipboard() : InputTextBox.Text;
+                if (string.IsNullOrEmpty(sourceText))
                 {
-                    MessageBox.Show("请先输入或粘贴要模拟打字的文本", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    _logService.Log(_settings.UseClipboard ? "剪贴板无可用文本，未开始打字" : "请先输入或粘贴要模拟打字的文本", LogService.LogLevel.Warning);
                     return;
                 }
 
-                string text = _textProcessor.ProcessText(InputTextBox.Text);
+                string text = _textProcessor.ProcessText(sourceText);
                 if (string.IsNullOrEmpty(text))
                 {
                     _logService.Log("处理后的文本为空，无法开始打字", LogService.LogLevel.Warning);
@@ -461,13 +487,15 @@ namespace TypeSimulator
                 _typeSimulator.Configure(
                     text,
                     _settings.TypingSpeed,
-                    _settings.EnableRandomDelay
+                    _settings.EnableRandomDelay,
+                    _settings.StartDelaySeconds
                 );
 
+                DisableMapping();
                 _typeSimulator.Start();
 
                 UpdateButtonStates(true);
-                StatusText.Text = "打字中...";
+                PauseTypingButton.Content = "暂停";
 
                 _logService.Log($"开始模拟打字，速度：{_settings.TypingSpeed} CPM，共 {text.Length} 个字符");
             }
@@ -498,7 +526,7 @@ namespace TypeSimulator
             {
                 _typeSimulator.Resume();
                 PauseTypingButton.Content = "暂停";
-                StatusText.Text = "打字中...";
+                StatusText.Text = _typeSimulator.RemainingDelaySeconds > 0 ? "等待切换窗口..." : "打字中...";
                 _logService.Log("继续模拟打字");
             }
             catch (Exception ex)
@@ -547,6 +575,7 @@ namespace TypeSimulator
 
         private void ToggleMapping()
         {
+            if (_typeSimulator.IsTyping) return;
             if (!_settings.MappingEnabled)
             {
                 // 如果当前是禁用状态，切换为启用

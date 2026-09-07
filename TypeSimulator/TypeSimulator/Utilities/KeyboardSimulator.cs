@@ -1,186 +1,108 @@
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace TypeSimulator.Utilities
 {
-    /// <summary>
-    /// 提供键盘输入模拟功能
-    /// </summary>
     public static class KeyboardSimulator
     {
-        // Win32 API 导入
-        [DllImport("user32.dll")]
-        private static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
+        private const uint KeyUp = 0x0002;
+        private const uint Unicode = 0x0004;
+        private static readonly object Sync = new object();
 
-        [DllImport("user32.dll")]
-        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct Input
+        {
+            internal uint Type;
+            internal InputUnion Data;
+        }
 
-        // 输入类型
-        private const int KEYEVENTF_KEYDOWN = 0x0000;
-        private const int KEYEVENTF_KEYUP = 0x0002;
-        private const int KEYEVENTF_UNICODE = 0x0004;
+        // Include MOUSEINPUT so INPUT has the native size on both x86 and x64.
+        [StructLayout(LayoutKind.Explicit)]
+        internal struct InputUnion
+        {
+            [FieldOffset(0)] internal KeyboardInput Keyboard;
+            [FieldOffset(0)] internal MouseInput Mouse;
+        }
 
-        // 互斥锁，确保同一时间只发送一个键盘输入
-        private static readonly object _lockObject = new object();
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct KeyboardInput
+        {
+            internal ushort VirtualKey, ScanCode;
+            internal uint Flags, Time;
+            internal UIntPtr ExtraInfo;
+        }
 
-        // 新增: 事件系统用于暂时禁用键盘钩子
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MouseInput
+        {
+            internal int X, Y;
+            internal uint MouseData, Flags, Time;
+            internal UIntPtr ExtraInfo;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint count, Input[] inputs, int size);
+
         public static event EventHandler SimulationStarting;
         public static event EventHandler SimulationCompleted;
 
-        /// <summary>
-        /// 模拟键盘按下和释放单个按键
-        /// </summary>
-        public static void PressKey(byte keyCode)
+        internal static Input[] CreateInputs(char character)
         {
-            lock (_lockObject)
+            ushort virtualKey = character == '\n' || character == '\r' ? (ushort)0x0D
+                : character == '\t' ? (ushort)0x09 : (ushort)0;
+            return CreatePair(virtualKey, virtualKey == 0 ? (ushort)character : (ushort)0,
+                virtualKey == 0 ? Unicode : 0);
+        }
+
+        private static Input[] CreatePair(ushort virtualKey, ushort scanCode, uint flags)
+        {
+            var down = new Input { Type = 1 };
+            down.Data.Keyboard = new KeyboardInput
+            {
+                VirtualKey = virtualKey, ScanCode = scanCode, Flags = flags
+            };
+            var up = down;
+            up.Data.Keyboard.Flags |= KeyUp;
+            return new[] { down, up };
+        }
+
+        private static void Send(Input[] inputs)
+        {
+            lock (Sync)
             {
                 try
                 {
-                    // 触发模拟开始事件
-                    OnSimulationStarting();
-
-                    keybd_event(keyCode, 0, KEYEVENTF_KEYDOWN, 0);
-                    Thread.Sleep(5); // 短暂延迟
-                    keybd_event(keyCode, 0, KEYEVENTF_KEYUP, 0);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"按键模拟失败: {ex.Message}");
+                    SimulationStarting?.Invoke(null, EventArgs.Empty);
+                    if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) != inputs.Length)
+                        throw new Win32Exception(Marshal.GetLastWin32Error(),
+                            "发送键盘输入失败，请检查目标窗口及其权限级别。");
                 }
                 finally
                 {
-                    // 触发模拟完成事件
-                    OnSimulationCompleted();
+                    SimulationCompleted?.Invoke(null, EventArgs.Empty);
                 }
             }
         }
 
-        /// <summary>
-        /// 模拟键入单个字符
-        /// </summary>
-        public static void TypeCharacter(char character)
-        {
-            lock (_lockObject)
-            {
-                try
-                {
-                    // 触发模拟开始事件
-                    OnSimulationStarting();
+        public static void PressKey(byte keyCode) => Send(CreatePair(keyCode, 0, 0));
 
-                    // 使用SendKeys实现单个字符输入
-                    // SendKeys可能在某些应用程序中不工作，但它是最通用的解决方案
-                    string keyString;
+        // Send UTF-16 directly instead of feeding English keystrokes to the IME.
+        public static void TypeCharacter(char character) => Send(CreateInputs(character));
 
-                    // 处理特殊字符
-                    switch (character)
-                    {
-                        case '{': keyString = @"{{}}"; break;
-                        case '}': keyString = @"{}}"; break;
-                        case '(': keyString = @"{(}"; break;
-                        case ')': keyString = @"{)}"; break;
-                        case '[': keyString = @"{[}"; break;
-                        case ']': keyString = @"{]}"; break;
-                        case '+': keyString = @"{+}"; break;
-                        case '^': keyString = @"{^}"; break;
-                        case '%': keyString = @"{%}"; break;
-                        case '~': keyString = @"{~}"; break;
-                        case '\n': keyString = @"{ENTER}"; break;
-                        case '\t': keyString = @"{TAB}"; break;
-                        default: keyString = character.ToString(); break;
-                    }
-
-                    System.Windows.Forms.SendKeys.SendWait(keyString);
-
-                    // 如果字符是大写，可能需要按住Shift键，这是SendKeys自动处理的
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"字符输入失败 '{character}': {ex.Message}");
-
-                    // 尝试备用方法
-                    try
-                    {
-                        System.Windows.Forms.SendKeys.Send(character.ToString());
-                    }
-                    catch
-                    {
-                        // 忽略备用方法的错误
-                    }
-                }
-                finally
-                {
-                    // 触发模拟完成事件
-                    OnSimulationCompleted();
-                }
-            }
-        }
-
-        /// <summary>
-        /// 模拟键入一段文本
-        /// </summary>
         public static void TypeText(string text, int delayBetweenCharsMs = 0)
         {
-            if (string.IsNullOrEmpty(text))
-                return;
-
-            lock (_lockObject)
+            if (string.IsNullOrEmpty(text)) return;
+            text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            lock (Sync)
             {
-                try
+                foreach (char character in text)
                 {
-                    // 触发模拟开始事件
-                    OnSimulationStarting();
-
-                    foreach (char c in text)
-                    {
-                        string keyString;
-
-                        // 处理特殊字符
-                        switch (c)
-                        {
-                            case '{': keyString = @"{{}}"; break;
-                            case '}': keyString = @"{}}"; break;
-                            case '(': keyString = @"{(}"; break;
-                            case ')': keyString = @"{)}"; break;
-                            case '[': keyString = @"{[}"; break;
-                            case ']': keyString = @"{]}"; break;
-                            case '+': keyString = @"{+}"; break;
-                            case '^': keyString = @"{^}"; break;
-                            case '%': keyString = @"{%}"; break;
-                            case '~': keyString = @"{~}"; break;
-                            case '\n': keyString = @"{ENTER}"; break;
-                            case '\t': keyString = @"{TAB}"; break;
-                            default: keyString = c.ToString(); break;
-                        }
-
-                        System.Windows.Forms.SendKeys.SendWait(keyString);
-
-                        if (delayBetweenCharsMs > 0)
-                        {
-                            Thread.Sleep(delayBetweenCharsMs);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"文本输入失败: {ex.Message}");
-                }
-                finally
-                {
-                    // 触发模拟完成事件
-                    OnSimulationCompleted();
+                    TypeCharacter(character);
+                    if (delayBetweenCharsMs > 0) Thread.Sleep(delayBetweenCharsMs);
                 }
             }
-        }
-
-        private static void OnSimulationStarting()
-        {
-            SimulationStarting?.Invoke(null, EventArgs.Empty);
-        }
-
-        private static void OnSimulationCompleted()
-        {
-            SimulationCompleted?.Invoke(null, EventArgs.Empty);
         }
     }
 }

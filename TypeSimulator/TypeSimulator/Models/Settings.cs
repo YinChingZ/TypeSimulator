@@ -13,6 +13,8 @@ namespace TypeSimulator.Models
         // 打字设置
         public int TypingSpeed { get; set; }
         public bool EnableRandomDelay { get; set; }
+        public int StartDelaySeconds { get; set; } = 3;
+        public bool UseClipboard { get; set; }
 
         // 映射设置
         public bool MappingEnabled { get; set; }

@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="TypeSimulator - 高级输入模拟器" Height="600" Width="800"
+        Title="TypeSimulator - 高级输入模拟器" Height="720" Width="900" MinHeight="680" MinWidth="850"
         WindowStartupLocation="CenterScreen" 
         Background="#F0F0F0">
     <Grid>
@@ -69,6 +69,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -78,17 +80,28 @@
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="打字速度:" VerticalAlignment="Center"/>
                         <Slider Grid.Row="0" Grid.Column="1" x:Name="SpeedSlider" 
-                                Minimum="50" Maximum="400" Value="150"
-                                TickFrequency="50" IsSnapToTickEnabled="True" 
+                                Minimum="10" Maximum="6000" Value="150"
+                                TickFrequency="10" SmallChange="10" LargeChange="100" IsSnapToTickEnabled="True"
+                                ToolTip="10–6000 字符/分钟；方向键微调 10，PageUp/PageDown 调整 100"
                                 ValueChanged="SpeedSlider_ValueChanged"/>
                         <TextBlock Grid.Row="0" Grid.Column="2" x:Name="SpeedValueText" 
-                                   Text="150 CPM" Width="60" TextAlignment="Right"/>
+                                   Text="150 CPM" Width="75" TextAlignment="Right"/>
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="随机延迟:" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <CheckBox Grid.Row="1" Grid.Column="1" x:Name="RandomDelayCheckBox" 
                                   Content="启用随机打字延迟" IsChecked="True" Margin="0,10,0,0"/>
 
-                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" 
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="启动等待:" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <Slider Grid.Row="2" Grid.Column="1" x:Name="StartDelaySlider"
+                                Minimum="0" Maximum="60" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"
+                                Margin="0,10,0,0" ToolTip="启动前等待秒数，期间可暂停或停止"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,10,0,0" TextAlignment="Right"
+                                   Text="{Binding ElementName=StartDelaySlider, Path=Value, StringFormat={}{0:0} 秒}"/>
+                        <CheckBox Grid.Row="3" Grid.ColumnSpan="3" x:Name="UseClipboardCheckBox"
+                                  Content="启动时直接读取剪贴板" Margin="0,10,0,0"
+                                  ToolTip="勾选后，在目标窗口按 Ctrl+Alt+T 即可输入剪贴板最新文本"/>
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3"
                                     Orientation="Horizontal" Margin="0,10,0,0">
                             <Button x:Name="StartTypingButton" Content="开始打字" Width="100" Margin="0,0,5,0"
                                     Click="StartTypingButton_Click"/>
@@ -116,7 +129,7 @@
                         <!-- 添加这段代码 -->
                         <TextBlock Grid.Row="1" Text="使用顺序循环映射模式：按照文本顺序依次输出每个字符" 
                             TextWrapping="Wrap" Margin="0,5,0,5"/>
-                        
+
                     </Grid>
                 </GroupBox>
 
@@ -189,7 +202,7 @@
             </StatusBarItem>
             <Separator/>
             <StatusBarItem HorizontalAlignment="Right">
-                <TextBlock x:Name="VersionText" Text="v1.0.0"/>
+                <TextBlock x:Name="VersionText" Text="v1.2.0"/>
             </StatusBarItem>
         </StatusBar>
 
